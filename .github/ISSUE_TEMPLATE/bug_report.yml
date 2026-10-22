@@ -1,0 +1,54 @@
+name: Bug report
+description: Something doesn't work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! **Please don't paste real email content, addresses, tokens or client IDs/secrets.** Screenshots of a real inbox: please blur them, or reproduce with `--demo-only`.
+        Security problem? Don't file it here, see SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: And what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start with `--demo-only --demo 2`
+        2. Hover the notch
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. 15.4
+    validations:
+      required: true
+  - type: dropdown
+    id: mac
+    attributes:
+      label: Display
+      options:
+        - MacBook with notch (built-in display)
+        - MacBook with notch + external display
+        - Mac without notch
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or version
+      description: "`git rev-parse --short HEAD` if you built from source"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: "`log show --last 10m --predicate 'process == \"NotchMail\"'`. Check for personal data before pasting."
+      render: text

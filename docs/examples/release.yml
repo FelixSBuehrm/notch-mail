@@ -1,0 +1,105 @@
+# DRAFT: not active. Copy to .github/workflows/release.yml once a signed and
+# notarized build works locally (see docs/distribution.md).
+#
+# Builds, tests, signs with Developer ID (hardened runtime), notarizes with
+# notarytool (App Store Connect API key), staples, and uploads the zip + DMG
+# to a DRAFT GitHub Release that you publish by hand.
+#
+# Assumes scripts/bundle.sh honours SIGN_IDENTITY (sign with that identity,
+# --options runtime --timestamp) instead of the local self-signed identity.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]   # version comes from the tag name (v1.0.0 -> 1.0.0)
+
+permissions:
+  contents: write   # create the draft release
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15          # bump when a newer runner image is GA
+    environment: release       # holds the secrets; add a required reviewer
+    timeout-minutes: 45
+    steps:
+      # Pin actions to a full commit SHA before enabling (tags shown for readability).
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Test
+        run: scripts/test.sh
+
+      - name: Import Developer ID certificate into a temporary keychain
+        env:
+          P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/release.keychain-db"
+          echo -n "$P12_BASE64" | base64 --decode -o "$RUNNER_TEMP/devid.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/devid.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/devid.p12"
+
+      - name: Build and sign
+        env:
+          SIGN_IDENTITY: ${{ secrets.DEVELOPER_ID_IDENTITY }}
+        run: |
+          scripts/bundle.sh
+          codesign --verify --strict --verbose=2 build/NotchMail.app
+          codesign -dv --verbose=4 build/NotchMail.app 2>&1 | grep -E "Authority|Runtime|Timestamp"
+
+      - name: Notarize and staple
+        env:
+          ASC_KEY_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER: ${{ secrets.ASC_API_ISSUER_ID }}
+          SIGN_IDENTITY: ${{ secrets.DEVELOPER_ID_IDENTITY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          echo -n "$ASC_KEY_BASE64" | base64 --decode -o "$KEY"
+          notarize() {
+            xcrun notarytool submit "$1" --key "$KEY" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER" --wait
+          }
+
+          ditto -c -k --keepParent build/NotchMail.app "$RUNNER_TEMP/notarize.zip"
+          notarize "$RUNNER_TEMP/notarize.zip"
+          xcrun stapler staple build/NotchMail.app
+          spctl --assess --type execute --verbose build/NotchMail.app
+
+          ditto -c -k --keepParent build/NotchMail.app "build/NotchMail-$VERSION.zip"
+
+          hdiutil create -volname "Notch Mail" -srcfolder build/NotchMail.app -ov -format UDZO "build/NotchMail-$VERSION.dmg"
+          codesign --sign "$SIGN_IDENTITY" --timestamp "build/NotchMail-$VERSION.dmg"
+          notarize "build/NotchMail-$VERSION.dmg"
+          xcrun stapler staple "build/NotchMail-$VERSION.dmg"
+
+          (cd build && shasum -a 256 NotchMail-"$VERSION".zip NotchMail-"$VERSION".dmg > SHA256SUMS.txt)
+          rm "$KEY"
+
+      - name: Draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+            --title "Notch Mail $VERSION" --generate-notes \
+            "build/NotchMail-$VERSION.zip" "build/NotchMail-$VERSION.dmg" build/SHA256SUMS.txt
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true

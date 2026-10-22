@@ -1,0 +1,30 @@
+name: Feature request
+description: An idea to make Notch Mail better.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Check the roadmap in the README first; it may already be planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem or itch?
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Want to build it?
+      options:
+        - label: I'd like to work on this myself (with or without AI help)

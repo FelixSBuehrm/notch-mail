@@ -1,0 +1,47 @@
+# SwiftPM / Xcode
+.build/
+build/
+.swiftpm/
+Packages/
+Package.resolved.bak
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Build products
+*.app
+*.dmg
+*.zip
+*.dSYM
+*.dSYM.zip
+
+# Signing material and secrets: never commit these
+*.p12
+*.pem
+*.p8
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
+*.keychain
+*.keychain-db
+.env
+.env*
+client_secret*.json
+credentials*.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Finder's hidden "Icon\r" files. On a case-insensitive Mac "Icon?" also matches
+# folders named "icons", so the README icons are let back in below.
+Icon?
+!docs/images/icons/
+._*
+
+# Editors
+.vscode/
+.idea/
+*.swp
